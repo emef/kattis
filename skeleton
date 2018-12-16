@@ -1,0 +1,107 @@
+#!/usr/bin/env python
+
+import html2text
+import os
+import requests
+import subprocess
+import sys
+from bs4 import BeautifulSoup
+
+MAKEFILE_FMT = '''
+name=%(name)s
+samplesin=$(wildcard samples/*.in)
+samplesout=$(wildcard samples/*.out)
+
+build: $(name).cpp
+	g++ -g -O2 -static -std=gnu++14 $(name).cpp -o $(name)
+
+judge: build
+	../judge $(name)
+
+test: build
+	../judge $(name) -test
+
+all: build
+'''[1:]
+
+CPP_SKEL = '''
+#include <stdio.h>
+
+int main(int argc, char **argv) {
+
+
+  return 0;
+}
+'''[1:-1]
+
+def main():
+    if len(sys.argv) != 2:
+        raise Exception('Missing problem name')
+
+    name = sys.argv[1]
+
+    make_problem_dir(name)
+    make_gitignore(name)
+    make_readme(name)
+    make_cpp(name)
+    make_makefile(name)
+
+    try:
+        make_samples(name)
+    except Exception as e:
+        print 'Error getting samples %s' % e
+
+def make_problem_dir(name):
+    try: os.makedirs(os.path.join(os.path.dirname(__file__), name))
+    except: pass
+
+def make_gitignore(name):
+    open(os.path.join(os.path.dirname(__file__), name, '.gitignore'), 'w').write(name + '\n')
+
+def make_readme(name):
+    readme_path = os.path.join(os.path.dirname(__file__), name, 'README.md')
+    if os.path.exists(readme_path):
+        return
+
+    url = 'https://open.kattis.com/problems/' + name
+    soup = BeautifulSoup(requests.get(url).text, 'html.parser')
+    body = soup.select('div.problembody')[0]
+    md = html2text.html2text(str(body).decode('utf-8'))
+
+    open(readme_path, 'w').write(md.encode('utf-8'))
+
+def make_samples(name):
+    url = 'https://open.kattis.com/problems/%s/file/statement/samples.zip' % name
+    tmp_dir = '/tmp/%s_samples' % name
+    zip_path = os.path.join(tmp_dir, 'samples.zip')
+    samples_dir = os.path.join(os.path.dirname(__file__), name, 'samples')
+
+    if os.path.exists(samples_dir):
+        return
+
+    try: os.makedirs(tmp_dir)
+    except: pass
+
+    try: os.makedirs(samples_dir)
+    except: pass
+
+    r = requests.get(url, allow_redirects=True)
+    open(zip_path, 'w').write(r.content)
+
+    devnull = open(os.devnull)
+    subprocess.check_call(
+        ['unzip', '-o', '-d', samples_dir, zip_path],
+        stdout=devnull, stderr=devnull)
+
+def make_cpp(name):
+    cpp_path = os.path.join(os.path.dirname(__file__), name, '%s.cpp' % name)
+    if not os.path.exists(cpp_path):
+        open(cpp_path, 'w').write(CPP_SKEL)
+
+def make_makefile(name):
+    makefile_path = os.path.join(os.path.dirname(__file__), name, 'Makefile')
+    if not os.path.exists(makefile_path):
+        open(makefile_path, 'w').write(MAKEFILE_FMT % {'name': name})
+
+if __name__ == '__main__':
+    main()

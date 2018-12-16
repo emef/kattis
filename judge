@@ -1,0 +1,22 @@
+#!/bin/bash
+name=$1
+arg=$2
+exe=$(dirname $0)/$name/$name
+samples=$(dirname $0)/$name/samples
+
+for sample_in in $samples/*.in; do
+  sample_ans=${sample_in/%.in/.ans}
+  sample_out=$(cat $sample_in | $exe)
+  if [[ $arg == "-test" ]]; then
+    echo "$sample_in"
+    echo "$sample_out"
+  else
+    sample_diff=$(echo "$sample_out" | diff - $sample_ans)
+    if [[ $sample_diff ]]; then
+      echo "[Fail] $sample_in"
+      echo "$sample_diff"
+    else
+      echo "[Success] $sample_in"
+    fi
+  fi
+done
